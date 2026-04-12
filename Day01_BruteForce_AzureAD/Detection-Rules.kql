@@ -1,0 +1,30 @@
+Identified Weakness:
+
+The rule triggers on failed logon volume alone and does not consider multi-account targeting from a single IP, making it noisy and less indicative of true brute force behavior.
+
+Before (Existing Rule):
+SigninLogs
+| where TimeGenerated > ago(5m)
+| where ResultType != 0  // Failed logins
+| summarize FailedAttempts = count() by IPAddress
+| where FailedAttempts > 20
+
+After (Improved Rule):
+SigninLogs
+| where TimeGenerated > ago(5m)  
+| where ResultType != 0  // Failed logins only
+| summarize 
+    FailedAttempts = count(), 
+    TargetedUsers = dcount(UserPrincipalName) 
+    by IPAddress
+| where FailedAttempts > 15  // Slightly lower threshold for sensitivity
+| where TargetedUsers >= 3  // Ensure multiple accounts are targeted (brute force / spray behavior)
+| project TimeGenerated, IPAddress, FailedAttempts, TargetedUsers
+
+Explanation:
+
+The improved rule increases detection accuracy by incorporating behavioral context — specifically, identifying when a single IP targets multiple accounts, which is a strong indicator of brute force or password spray activity.
+
+Noise is reduced because single-user lockouts or mistyped passwords will not meet the multi-account condition, preventing unnecessary alerts.
+
+Detection is also earlier and more precise, as the threshold is slightly lowered but compensated with context, allowing SOC analysts to catch real attacks faster without increasing false positives.
