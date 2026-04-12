@@ -1,0 +1,42 @@
+// Q1: Which accounts were targeted by the brute force attempts and what was the failure pattern?
+// Why this matters: Establishes scope of attack and confirms brute force behavior against privileged identities
+SigninLogs
+| where TimeGenerated between (datetime(2026-04-12 08:00:00) .. datetime(2026-04-12 08:10:00))  // 5–10 min window around alert
+| where IPAddress == "185.243.115.23"  // Attacker IP from alert
+| where ResultType != 0  // Failed logins only
+| project TimeGenerated, UserPrincipalName, IPAddress, ResultType, ResultDescription, AppDisplayName
+| order by TimeGenerated asc
+
+// Q2: Did any of the targeted accounts have a successful login from the same IP?
+// Why this matters: Determines if brute force led to account compromise
+SigninLogs
+| where TimeGenerated between (datetime(2026-04-12 08:00:00) .. datetime(2026-04-12 09:00:00))  // Extend window post-attack
+| where IPAddress == "185.243.115.23"
+| where ResultType == 0  // Successful logins
+| project TimeGenerated, UserPrincipalName, IPAddress, ConditionalAccessStatus, AuthenticationRequirement
+| order by TimeGenerated asc
+
+// Q3: Were there successful logins to these accounts from any OTHER IPs shortly after the attack?
+// Why this matters: Detects attacker switching infrastructure after password guessing
+SigninLogs
+| where TimeGenerated between (datetime(2026-04-12 08:00:00) .. datetime(2026-04-12 10:00:00))
+| where UserPrincipalName in ("admin1@finsecure.com", "admin2@finsecure.com", "admin3@finsecure.com")
+| where ResultType == 0  // Successful logins
+| project TimeGenerated, UserPrincipalName, IPAddress, Location, DeviceDetail
+| order by TimeGenerated asc
+
+// Q4: What was the MFA behavior for any successful authentication attempts?
+// Why this matters: Validates whether MFA blocked or allowed potential compromise
+SigninLogs
+| where TimeGenerated between (datetime(2026-04-12 08:00:00) .. datetime(2026-04-12 10:00:00))
+| where UserPrincipalName in ("admin1@finsecure.com", "admin2@finsecure.com", "admin3@finsecure.com")
+| where ResultType == 0
+| project TimeGenerated, UserPrincipalName, IPAddress, AuthenticationRequirement, ConditionalAccessStatus, Status
+| order by TimeGenerated asc
+
+// Q5: Is this IP associated with repeated authentication attempts across other users (broader spray activity)?
+// Why this matters: Determines if attack is targeted or part of wider password spray campaign
+SigninLogs
+| where TimeGenerated > ago(24h)
+| where IPAddress == "185.243.115.23"
+| summarize AttemptCount = count(), DistinctUsers = dcount(UserPrincipalName) by IPAddresss
