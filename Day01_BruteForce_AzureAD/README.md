@@ -1,10 +1,10 @@
 # Day 1 — Brute Force Attack on Azure AD
 
--**Incident ID:** INC-20260101-001
--**Date:** 2026-01-01
--**Severity:** High
--**Type:** Credential Access — Brute Force
--**Client Industry:** BFSI (FinSecure Bank)
+**Incident ID:** INC-20260101-001<br>
+**Date:** 2026-01-01<br>
+**Severity:** High<br>
+**Type:** Credential Access — Brute Force<br>
+**Client Industry:** BFSI (FinSecure Bank)
 
 ---
 
