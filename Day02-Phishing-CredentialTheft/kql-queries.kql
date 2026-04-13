@@ -1,0 +1,47 @@
+// Q1: Was the login truly anomalous for this user?
+// Why this matters: Establish baseline vs anomaly to confirm account compromise
+SigninLogs
+| where TimeGenerated between (datetime(2026-04-13 20:00:00) .. datetime(2026-04-13 23:00:00))
+| where UserPrincipalName == "dr.anita.sharma@medicore.com"
+| project TimeGenerated, IPAddress, Location, DeviceDetail, AppDisplayName, ResultType, MFAResult
+| order by TimeGenerated asc
+
+// Q2: Did the user receive and interact with a malicious email attachment?
+// Why this matters: Validate initial access vector (phishing)
+EmailEvents
+| where TimeGenerated between (datetime(2026-04-13 20:00:00) .. datetime(2026-04-13 22:30:00))
+| where RecipientEmailAddress == "dr.anita.sharma@medicore.com"
+| project TimeGenerated, SenderFromAddress, Subject, NetworkMessageId
+| order by TimeGenerated asc
+EmailAttachmentInfo
+| where TimeGenerated between (datetime(2026-04-13 20:00:00) .. datetime(2026-04-13 22:30:00))
+| where RecipientEmailAddress == "dr.anita.sharma@medicore.com"
+| project TimeGenerated, FileName, SHA256, ThreatTypes
+
+// Q3: What actions occurred immediately after the suspicious login?
+// Why this matters: Identify attacker activity and persistence mechanisms
+OfficeActivity
+| where TimeGenerated >= datetime(2026-04-13 22:14:00)
+| where UserId == "dr.anita.sharma@medicore.com"
+| project TimeGenerated, Operation, Workload, ClientIP, UserAgent, Parameters
+| order by TimeGenerated asc
+
+// Q4: Was there evidence of macro-driven execution on the endpoint?
+// Why this matters: Confirm exploitation stage (macro → PowerShell execution)
+DeviceProcessEvents
+| where TimeGenerated between (datetime(2026-04-13 21:50:00) .. datetime(2026-04-13 22:10:00))
+| where InitiatingProcessAccountName == "dr.anita.sharma"
+| where InitiatingProcessFileName in~ ("EXCEL.EXE", "WINWORD.EXE")
+| where ProcessCommandLine has_any ("powershell", "EncodedCommand", "IEX")
+| project TimeGenerated, DeviceName, InitiatingProcessFileName, ProcessCommandLine
+| order by TimeGenerated asc
+
+// Q5: Did the attacker establish persistence via mailbox rules?
+// Why this matters: Confirm data exfiltration mechanism and persistence
+
+OfficeActivity
+| where TimeGenerated >= datetime(2026-04-13 22:14:00)
+| where UserId == "dr.anita.sharma@medicore.com"
+| where Operation == "InboxRuleCreated"
+| project TimeGenerated, UserId, Operation, Parameters
+| order by TimeGenerated asc
