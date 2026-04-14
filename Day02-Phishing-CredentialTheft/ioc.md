@@ -1,0 +1,8 @@
+| IOC                                                                             | Type         | Source                      | Enrichment Insight                                                                                  | Confidence |
+| ------------------------------------------------------------------------------- | ------------ | --------------------------- | --------------------------------------------------------------------------------------------------- | ---------- |
+| 185.193.88.47                                                                   | IP           | SigninLogs                  | AbuseIPDB score 92 — associated with known malicious activity and anomalous geo-login (Romania)     | High       |
+| medicore-support.co                                                             | Domain       | EmailEvents                 | Newly registered domain (6 days old), spoofing legitimate partner — typical phishing infrastructure | High       |
+| 8f3c9e5c2d4a...                                                                 | File Hash    | EmailAttachmentInfo         | VirusTotal: flagged by 38 engines — confirmed malicious macro-enabled attachment                    | High       |
+| [anita.sharma.secure@protonmail.com](mailto:anita.sharma.secure@protonmail.com) | Email        | OfficeActivity              | External forwarding address used for data exfiltration persistence via inbox rule                   | High       |
+| [dr.anita.sharma@medicore.com](mailto:dr.anita.sharma@medicore.com)             | User Account | SigninLogs / OfficeActivity | Targeted account with confirmed compromise and anomalous login behavior                             | High       |
+

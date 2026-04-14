@@ -1,0 +1,51 @@
+Identified Weakness:
+
+The rule only detects post-compromise activity by requiring a successful suspicious login, missing the earlier malicious execution phase where prevention is still possible.
+
+Before (Existing Rule):
+let MaliciousEmailRecipients = EmailAttachmentInfo
+| where TimeGenerated > ago(2h)
+| where ThreatTypes has "Malware"
+| project RecipientEmailAddress, AttachmentFileName, SHA256, TimeGenerated;
+
+let SuspiciousSignins = SigninLogs
+| where TimeGenerated > ago(2h)
+| where ResultType == 0
+| where Location !in ("IN")
+| project UserPrincipalName, IPAddress, AppDisplayName, TimeGenerated;
+
+MaliciousEmailRecipients
+| join kind=inner SuspiciousSignins
+on $left.RecipientEmailAddress == $right.UserPrincipalName
+| project RecipientEmailAddress, AttachmentFileName, SHA256, IPAddress, AppDisplayName, TimeGenerated
+
+After (Improved Rule):
+// Detect malicious attachment delivery followed by suspicious macro-driven execution on endpoint
+// This shifts detection earlier in the attack chain (pre-auth compromise)
+
+let MaliciousAttachment = EmailAttachmentInfo
+| where TimeGenerated > ago(2h)  // Scope to recent emails
+| where ThreatTypes has "Malware"  // Confirmed malicious attachment
+| project RecipientEmailAddress, SHA256, TimeGenerated;
+
+let SuspiciousExecution = DeviceProcessEvents
+| where TimeGenerated > ago(2h)  // Same investigation window
+| where ProcessCommandLine has_any ("powershell", "EncodedCommand", "IEX")  // Common macro execution patterns
+| where InitiatingProcessFileName =~ "WINWORD.EXE" or InitiatingProcessFileName =~ "EXCEL.EXE"  // Office spawning execution
+| project InitiatingProcessAccountName, DeviceName, ProcessCommandLine, TimeGenerated;
+
+MaliciousAttachment
+| join kind=inner SuspiciousExecution
+on $left.RecipientEmailAddress == $right.InitiatingProcessAccountName
+| project RecipientEmailAddress, DeviceName, ProcessCommandLine, TimeGenerated
+
+Explanation:
+
+Detection Accuracy:
+The improved rule correlates confirmed malicious attachments with actual execution behavior (PowerShell spawned from Office apps), ensuring alerts are tied to real exploitation rather than just delivery.
+
+Noise Reduction:
+By requiring both a malicious attachment and suspicious process execution, the rule avoids alerting on benign email delivery or isolated PowerShell usage, reducing false positives.
+
+Earlier Detection:
+The key improvement is shifting detection before credential misuse — catching the attack at the execution stage (macro → PowerShell), instead of waiting for a successful login. This provides a critical response window to isolate the endpoint and prevent account takeover.
