@@ -1,0 +1,37 @@
+Identified Weakness:
+
+The rule only detects lateral movement after multiple NTLM authentications, missing earlier high-signal credential dumping activity that precedes the attack.
+
+Before (Existing Rule):
+IdentityLogonEvents
+| where TimeGenerated > ago(10m)
+| where Protocol == "NTLM"
+| summarize TargetHosts = dcount(DeviceName), HostList = make_set(DeviceName) 
+    by AccountName, DeviceName, bin(TimeGenerated, 5m)
+| where TargetHosts >= 3
+
+After (Improved Rule):
+// Step 1: Detect potential credential dumping (LSASS access)
+let CredentialDumping = DeviceProcessEvents
+| where TimeGenerated > ago(30m)
+| where ProcessCommandLine has_any ("lsass", "comsvcs.dll", "MiniDump", "sekurlsa")  // LSASS dump indicators
+| project DumpTime = TimeGenerated, DeviceName;
+
+// Step 2: Detect NTLM authentication spread from same device
+let NTLMActivity = IdentityLogonEvents
+| where TimeGenerated > ago(30m)
+| where Protocol == "NTLM"
+| summarize TargetHosts = dcount(DestinationDeviceName), HostList = make_set(DestinationDeviceName)
+    by AccountName, DeviceName, bin(TimeGenerated, 5m)
+| where TargetHosts >= 2;  // Lower threshold for earlier signal
+
+// Step 3: Correlate dumping with subsequent NTLM activity
+CredentialDumping
+| join kind=inner (NTLMActivity) on DeviceName
+| where NTLMActivity_TimeGenerated > DumpTime  // Ensure sequence: dump → movement
+| project DumpTime, NTLMTime = NTLMActivity_TimeGenerated, DeviceName, AccountName, TargetHosts, HostList
+
+Explanation:
+Detection accuracy: By correlating LSASS dumping with NTLM activity, the rule focuses on true attack sequences (credential access → lateral movement), reducing false positives from benign NTLM usage.
+Noise reduction: Instead of alerting on every multi-host NTLM event, it requires a preceding suspicious action (credential dumping), which is rare in legitimate operations.
+Earlier detection: Lowering the NTLM threshold and anchoring detection to the dump event enables alerting shortly after initial movement begins—potentially catching the attacker over an hour earlier in this case.
