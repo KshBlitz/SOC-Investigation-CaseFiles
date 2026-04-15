@@ -1,0 +1,44 @@
+// Q1: Did the same account perform NTLM authentications to multiple hosts from a single device?
+// Why this matters: Confirms suspected Pass-the-Hash lateral movement pattern.
+IdentityLogonEvents
+| where TimeGenerated between (datetime(2026-04-14 11:10:00) .. datetime(2026-04-14 11:30:00))
+| where AccountName == "rahul.s"
+| where Protocol == "NTLM"
+| project TimeGenerated, AccountName, DeviceName, DestinationDeviceName, ActionType, LogonType
+| order by TimeGenerated asc
+
+// Q2: Were the NTLM authentication attempts successful and sequential across hosts?
+// Why this matters: Validates attacker-controlled movement vs failed/brute-force attempts.
+IdentityLogonEvents
+| where TimeGenerated between (datetime(2026-04-14 11:10:00) .. datetime(2026-04-14 11:30:00))
+| where AccountName == "rahul.s"
+| where DeviceName == "FS-MUM-WS-447"
+| where Protocol == "NTLM"
+| project TimeGenerated, DestinationDeviceName, ActionType, LogonType
+| order by TimeGenerated asc
+
+// Q3: Was there credential dumping activity on the source host prior to lateral movement?
+// Why this matters: Identifies how the attacker obtained reusable credentials (root cause).
+DeviceProcessEvents
+| where DeviceName == "FS-MUM-WS-447"
+| where TimeGenerated between (datetime(2026-04-14 09:00:00) .. datetime(2026-04-14 11:20:00))
+| where ProcessCommandLine has_any ("lsass", "comsvcs.dll", "MiniDump", "sekurlsa")
+| project TimeGenerated, FileName, ProcessCommandLine, InitiatingProcessFileName
+| order by TimeGenerated asc
+
+// Q4: What process initiated the credential dumping activity?
+// Why this matters: Helps trace initial execution vector and attacker foothold.
+DeviceProcessEvents
+| where DeviceName == "FS-MUM-WS-447"
+| where TimeGenerated between (datetime(2026-04-14 09:30:00) .. datetime(2026-04-14 09:50:00))
+| where FileName in ("rundll32.exe", "powershell.exe")
+| project TimeGenerated, FileName, ProcessCommandLine, InitiatingProcessFileName
+| order by TimeGenerated asc
+
+// Q5: Did the compromised account show any unusual authentication behavior before the attack window?
+// Why this matters: Establishes baseline vs anomaly to confirm compromise.
+IdentityLogonEvents
+| where TimeGenerated between (datetime(2026-04-14 00:00:00) .. datetime(2026-04-14 11:10:00))
+| where AccountName == "rahul.s"
+| project TimeGenerated, DeviceName, DestinationDeviceName, Protocol, ActionType
+| order by TimeGenerated asc
