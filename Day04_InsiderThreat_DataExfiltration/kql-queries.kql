@@ -1,0 +1,46 @@
+// Q1: Did the user authenticate normally, and from what device/context?
+// Why this matters: Confirms whether access was legitimate or suspicious (insider vs compromised account)
+SigninLogs
+| where TimeGenerated between (datetime(2026-04-16 22:30:00) .. datetime(2026-04-17 00:00:00))
+| where UserPrincipalName == "rahul.verma@legaledge.in"
+| project TimeGenerated, UserPrincipalName, AppDisplayName, ClientAppUsed, DeviceDetail, ConditionalAccessStatus, Location, IPAddress
+| order by TimeGenerated asc
+
+
+// Q2: What exact SharePoint actions did the user perform before and during the spike?
+// Why this matters: Establishes behavioral pattern (navigation vs bulk action)
+OfficeActivity
+| where TimeGenerated between (datetime(2026-04-16 23:00:00) .. datetime(2026-04-17 00:00:00))
+| where UserId == "rahul.verma@legaledge.in"
+| where Workload == "SharePoint"
+| project TimeGenerated, Operation, SourceFileName, Site_Url, ClientIP
+| order by TimeGenerated asc
+
+
+// Q3: What files were downloaded and how sensitive were they?
+// Why this matters: Validates whether activity was targeted toward high-value data
+OfficeActivity
+| where TimeGenerated between (datetime(2026-04-16 23:00:00) .. datetime(2026-04-17 00:00:00))
+| where UserId == "rahul.verma@legaledge.in"
+| where Operation == "FileDownloaded"
+| project TimeGenerated, SourceFileName, FileSize, SensitivityLabel, Site_Url
+| order by TimeGenerated asc
+
+
+// Q4: Did the user attempt any external sharing or uploads after downloading data?
+// Why this matters: Confirms if exfiltration occurred via monitored M365 channels
+OfficeActivity
+| where TimeGenerated between (datetime(2026-04-16 23:00:00) .. datetime(2026-04-17 01:00:00))
+| where UserId == "rahul.verma@legaledge.in"
+| where Operation in ("SharingSet", "FileUploaded", "AnonymousLinkCreated")
+| project TimeGenerated, Operation, SourceFileName, DestinationUrl, UserId
+| order by TimeGenerated asc
+
+
+// Q5: Is there any endpoint visibility for post-download activity (staging/exfil)?
+// Why this matters: Determines if data movement can be tracked beyond SharePoint
+DeviceFileEvents
+| where TimeGenerated between (datetime(2026-04-16 23:00:00) .. datetime(2026-04-17 01:00:00))
+| where InitiatingProcessAccountName == "rahul.verma"
+| project TimeGenerated, DeviceName, FileName, FolderPath, ActionType
+| order by TimeGenerated asc
