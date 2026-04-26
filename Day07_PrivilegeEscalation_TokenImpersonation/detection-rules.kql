@@ -1,0 +1,50 @@
+Identified Weakness:
+The rule relies on command-line keyword matching, making it easily bypassable by attackers using obfuscation or tools that do not expose those strings. 
+
+Before (Existing Rule):
+DeviceProcessEvents
+| where TimeGenerated > ago(5m)
+| where FileName =~ "lsass.exe"
+| join kind=inner (
+ DeviceProcessEvents
+ | where InitiatingProcessFileName !in~ 
+("lsass.exe","wininit.exe","services.exe","taskmgr.exe")
+) on DeviceId
+| where InitiatingProcessCommandLine contains_any ("access", "token", "duplicate")
+| project TimeGenerated, DeviceName, InitiatingProcessFileName, 
+InitiatingProcessCommandLine, AccountName
+
+After (Improved Rule):
+DeviceProcessEvents
+| where TimeGenerated > ago(5m) 
+// Focus on recent activity
+
+| where FileName =~ "lsass.exe" 
+// Target LSASS access (high-value behavior)
+
+| join kind=inner (
+    DeviceProcessEvents
+    | where InitiatingProcessFileName !in~ 
+    ("lsass.exe","wininit.exe","services.exe","taskmgr.exe","lsm.exe")
+// Exclude known legitimate parent processes
+) on DeviceId
+
+| where InitiatingProcessIntegrityLevel !~ "System" 
+// Focus on non-system processes (higher risk)
+
+| where InitiatingProcessFileName !startswith "MsMpEng" 
+// Exclude Defender AV legitimate access
+
+| summarize EventCount = count() 
+    by DeviceName, InitiatingProcessFileName, AccountName, bin(TimeGenerated, 1m)
+// Group activity to reduce noise and add context
+
+| where EventCount >= 1 
+// Even a single abnormal LSASS access is suspicious
+
+| project TimeGenerated, DeviceName, InitiatingProcessFileName, AccountName
+
+Explanation:
+Detection accuracy: Moves from fragile string-based detection to behavioral detection of LSASS access by non-system processes, making it resilient against tool variations.
+Noise reduction: Filters out known legitimate processes (system binaries and Defender), reducing expected background activity.
+Earlier detection: Detects abnormal LSASS access regardless of command-line visibility, ensuring consistent detection even if attackers obfuscate or modify execution methods.
