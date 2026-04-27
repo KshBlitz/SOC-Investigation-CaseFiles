@@ -1,0 +1,40 @@
+// Q1: Did the user obtain elevated privileges after the suspicious LSASS access?
+// Why this matters: Confirms whether token impersonation successfully resulted in privilege escalation
+SecurityEvent
+| where TimeGenerated between (datetime(2026-04-25 09:10:00) .. datetime(2026-04-25 09:30:00))
+| where EventID == 4672
+| where Account contains "rahul.singh"
+| project TimeGenerated, Computer, Account, PrivilegeList
+
+// Q2: What exact process activity led to LSASS access on the affected host?
+// Why this matters: Establishes the execution chain and validates abnormal parent-child behavior
+DeviceProcessEvents
+| where TimeGenerated between (datetime(2026-04-25 09:00:00) .. datetime(2026-04-25 09:20:00))
+| where DeviceName == "FSB-WKS-447"
+| where InitiatingProcessFileName =~ "svchost.exe"
+| project TimeGenerated, FileName, InitiatingProcessFileName, ProcessCommandLine, InitiatingProcessCommandLine
+
+// Q3: Was LSASS accessed with indicators of token manipulation behavior?
+// Why this matters: Validates attacker technique (token duplication vs normal access)
+DeviceProcessEvents
+| where TimeGenerated between (datetime(2026-04-25 09:15:00) .. datetime(2026-04-25 09:20:00))
+| where DeviceName == "FSB-WKS-447"
+| where FileName =~ "lsass.exe"
+| where InitiatingProcessCommandLine contains_any ("DuplicateToken", "OpenProcess", "token")
+| project TimeGenerated, DeviceName, InitiatingProcessFileName, InitiatingProcessCommandLine, AccountName
+
+// Q4: What suspicious activity occurred prior to LSASS access (initial foothold)?
+// Why this matters: Identifies entry point and confirms attacker staging phase before escalation
+DeviceProcessEvents
+| where TimeGenerated between (datetime(2026-04-25 07:30:00) .. datetime(2026-04-25 09:00:00))
+| where DeviceName == "FSB-WKS-447"
+| where FolderPath contains "\Temp\"
+| where InitiatingProcessAccountName contains "rahul.singh"
+| project TimeGenerated, FileName, FolderPath, ProcessCommandLine, InitiatingProcessFileName
+
+// Q5: Was there any immediate post-escalation activity or lateral movement attempts?
+// Why this matters: Determines if attacker progressed beyond privilege escalation stage
+DeviceNetworkEvents
+| where TimeGenerated between (datetime(2026-04-25 09:18:00) .. datetime(2026-04-25 10:00:00))
+| where DeviceName == "FSB-WKS-447"
+| project TimeGenerated, DeviceName, RemoteIP, RemotePort, InitiatingProcessFileName, InitiatingProcessCommandLine
