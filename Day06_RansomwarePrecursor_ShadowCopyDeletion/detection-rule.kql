@@ -1,0 +1,36 @@
+Identified Weakness:
+
+The rule detects individual destructive commands but does not correlate multiple ransomware precursor actions within a time window, resulting in fragmented low-confidence alerts.
+
+Before (Existing Rule):
+DeviceProcessEvents
+| where TimeGenerated > ago(30m)
+| where ProcessCommandLine has_any ("vssadmin delete shadows", "wbadmin delete catalog", "bcdedit /set")
+| where InitiatingProcessAccountName !in ("SYSTEM", "TrustedInstaller")
+| summarize CommandCount = count() by DeviceName, InitiatingProcessAccountName, bin(TimeGenerated, 5m)
+| where CommandCount >= 1
+
+After (Improved Rule):
+DeviceProcessEvents
+| where TimeGenerated > ago(30m) // Focus on recent activity window
+| where ProcessCommandLine has_any (
+    "net.exe view",                // Enumeration precursor
+    "vssadmin delete shadows",    // Shadow copy deletion
+    "wbadmin delete catalog",     // Backup catalog removal
+    "bcdedit /set"                // Recovery disable
+)
+| where InitiatingProcessAccountName !in ("SYSTEM", "TrustedInstaller") // Reduce system noise
+| summarize 
+    CommandSet = make_set(ProcessCommandLine), 
+    CommandCount = dcount(ProcessCommandLine),
+    StartTime = min(TimeGenerated),
+    EndTime = max(TimeGenerated)
+    by DeviceName, InitiatingProcessAccountName
+| where CommandCount >= 3 // Require multiple distinct behaviors (ransomware staging pattern)
+| extend TimeWindow = datetime_diff("minute", EndTime, StartTime)
+| where TimeWindow <= 30 // Ensure activity occurs in short sequence (behavioral correlation)
+
+Explanation:
+Detection accuracy: Moves from single-event detection to multi-stage behavioral correlation, aligning with actual ransomware playbook observed in the incident
+Noise reduction: Eliminates benign single-command executions by requiring multiple distinct high-risk actions within a defined window
+Earlier detection: Includes enumeration (net.exe) along with destructive commands, enabling detection during staging phase before encryption begins

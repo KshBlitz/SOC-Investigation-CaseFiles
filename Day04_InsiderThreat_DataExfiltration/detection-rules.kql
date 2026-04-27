@@ -1,0 +1,48 @@
+Identified Weakness:
+The rule relies solely on high-volume thresholds, causing delayed detection and missing early-stage suspicious behavior (especially during off-hours).
+
+Before (Existing Rule):
+
+OfficeActivity
+| where TimeGenerated > ago(30m)
+| where Workload == "SharePoint"
+| where Operation == "FileDownloaded"
+| summarize DownloadCount = count(), TotalBytes = sum(FileSize) by UserId, bin(TimeGenerated, 5m)
+| where DownloadCount > 200 or TotalBytes > 2000000000
+| project TimeGenerated, UserId, DownloadCount, TotalBytes
+
+After (Improved Rule):
+// Detect abnormal SharePoint downloads with basic behavioral context (time-of-day)
+
+OfficeActivity
+| where TimeGenerated > ago(30m)
+| where Workload == "SharePoint"
+| where Operation == "FileDownloaded"
+
+// Aggregate user download behavior in short intervals
+| summarize DownloadCount = count(), TotalBytes = sum(FileSize) 
+    by UserId, bin(TimeGenerated, 5m)
+
+// Add time-of-day context (business hours vs after-hours)
+| extend Hour = datetime_part("hour", TimeGenerated)
+| extend AfterHours = iff(Hour < 8 or Hour > 21, 1, 0)
+
+// Trigger conditions:
+// 1. Original high-volume threshold (kept for strong signals)
+// 2. Lower threshold if activity occurs after-hours
+| where 
+    (DownloadCount > 200 or TotalBytes > 2000000000)  // existing baseline
+    or (AfterHours == 1 and DownloadCount > 50)       // earlier detection for unusual timing
+
+| project TimeGenerated, UserId, DownloadCount, TotalBytes, AfterHours
+
+Explanation:
+
+Detection Accuracy:
+By adding time-of-day context, the rule now distinguishes between expected business activity and suspicious behavior, improving relevance without needing external data sources.
+
+Noise Reduction:
+Instead of lowering thresholds globally (which would create noise), thresholds are reduced only for after-hours activity — a strong behavioral anomaly in this case.
+
+Earlier Detection:
+The improved rule would have triggered much earlier (around the initial spike), rather than waiting until 2GB+ was already downloaded. This enables faster response during the early stages of data staging.

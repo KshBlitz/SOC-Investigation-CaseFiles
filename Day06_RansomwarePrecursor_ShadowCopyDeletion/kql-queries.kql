@@ -1,0 +1,34 @@
+// Q1: What was the initial execution chain on the compromised host?
+// Why this matters: Identifies entry point and confirms how the attack started
+DeviceProcessEvents
+| where TimeGenerated between (datetime(2026-04-21 21:00:00) .. datetime(2026-04-21 22:15:00))
+| where DeviceName == "MT-ENG-WS-047"
+| project TimeGenerated, FileName, ProcessCommandLine, InitiatingProcessFileName, InitiatingProcessCommandLine, AccountName
+| order by TimeGenerated asc
+
+// Q2: Did the host communicate with any known malicious external IP?
+// Why this matters: Confirms command-and-control or payload delivery activity
+DeviceNetworkEvents
+| where TimeGenerated between (datetime(2026-04-21 21:10:00) .. datetime(2026-04-21 22:15:00))
+| where DeviceName == "MT-ENG-WS-047"
+| where RemoteIP == "185.224.128.77"
+| project TimeGenerated, DeviceName, RemoteIP, RemotePort, InitiatingProcessFileName, InitiatingProcessCommandLine
+| order by TimeGenerated asc
+
+// Q3: What suspicious commands were executed that indicate ransomware staging?
+// Why this matters: Validates destructive behavior targeting recovery mechanisms
+DeviceProcessEvents
+| where TimeGenerated between (datetime(2026-04-21 21:50:00) .. datetime(2026-04-21 22:15:00))
+| where DeviceName == "MT-ENG-WS-047"
+| where ProcessCommandLine has_any ("net.exe view", "vssadmin delete shadows", "wbadmin delete catalog", "bcdedit /set")
+| project TimeGenerated, FileName, ProcessCommandLine, InitiatingProcessFileName, AccountName
+| order by TimeGenerated asc
+
+// Q4: Was there any file encryption or mass file modification activity?
+// Why this matters: Confirms whether ransomware execution phase has begun
+DeviceFileEvents
+| where TimeGenerated between (datetime(2026-04-21 21:30:00) .. datetime(2026-04-21 22:30:00))
+| where DeviceName == "MT-ENG-WS-047"
+| where ActionType in ("FileCreated", "FileModified", "FileRenamed")
+| project TimeGenerated, FileName, FolderPath, ActionType, InitiatingProcessFileName
+| order by TimeGenerated asc
