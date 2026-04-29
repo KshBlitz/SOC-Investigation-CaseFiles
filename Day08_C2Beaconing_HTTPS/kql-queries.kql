@@ -1,0 +1,45 @@
+// Q1: Is the suspected endpoint consistently communicating with the same external IP?
+// Why this matters: Validates whether traffic pattern matches beaconing behavior (repetitive, single destination)
+DeviceNetworkEvents
+| where DeviceName == "DEV-LAPTOP-023"
+| where RemoteIP == "52.184.217.91"
+| where TimeGenerated between (datetime(2026-04-08 17:00:00) .. datetime(2026-04-08 21:15:00))
+| project TimeGenerated, RemoteIP, RemotePort, SentBytes, ReceivedBytes
+| sort by TimeGenerated asc
+
+// Q2: What is the interval between consecutive connections (is it periodic)?
+// Why this matters: Confirms command-and-control beaconing via consistent timing intervals
+DeviceNetworkEvents
+| where DeviceName == "DEV-LAPTOP-023"
+| where RemoteIP == "52.184.217.91"
+| where TimeGenerated between (datetime(2026-04-08 17:00:00) .. datetime(2026-04-08 21:15:00))
+| project TimeGenerated
+| sort by TimeGenerated asc
+| extend PrevTime = prev(TimeGenerated)
+| extend IntervalSeconds = datetime_diff("second", TimeGenerated, PrevTime)
+
+// Q3: Which process is responsible for generating this outbound traffic?
+// Why this matters: Identifies execution source to determine if activity is legitimate or malicious
+DeviceNetworkEvents
+| where DeviceName == "DEV-LAPTOP-023"
+| where RemoteIP == "52.184.217.91"
+| where TimeGenerated between (datetime(2026-04-08 17:00:00) .. datetime(2026-04-08 21:15:00))
+| project TimeGenerated, InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessSHA256
+
+// Q4: Was there any variation in data transfer indicating command execution?
+// Why this matters: Spikes in payload size may indicate attacker-issued commands or data exchange
+DeviceNetworkEvents
+| where DeviceName == "DEV-LAPTOP-023"
+| where RemoteIP == "52.184.217.91"
+| where TimeGenerated between (datetime(2026-04-08 17:00:00) .. datetime(2026-04-08 21:15:00))
+| project TimeGenerated, SentBytes, ReceivedBytes
+| sort by SentBytes desc
+
+// Q5: Did the identified process execute suspicious commands on the host?
+// Why this matters: Confirms post-beacon activity and validates attacker interaction with endpoint
+DeviceProcessEvents
+| where DeviceName == "DEV-LAPTOP-023"
+| where TimeGenerated between (datetime(2026-04-08 17:00:00) .. datetime(2026-04-08 21:15:00))
+| where FileName == "powershell.exe"
+| project TimeGenerated, ProcessCommandLine, InitiatingProcessFileName, InitiatingProcessCommandLine
+| sort by TimeGenerated asc
