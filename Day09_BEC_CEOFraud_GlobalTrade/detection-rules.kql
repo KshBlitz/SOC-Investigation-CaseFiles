@@ -2,24 +2,15 @@
 
 The rule detects impersonation emails per event after delivery but does not correlate multiple recipients, missing coordinated BEC campaigns and delaying prioritization.
 
----
-
 ### Before (Existing Rule):
-
-```kql
 EmailEvents
 | where TimeGenerated > ago(30m)
 | where SenderFromDomain !contains "globaltrade.com"
 | where SenderDisplayName in~ ("Rajiv Mehra", "CEO Rajiv Mehra")
 | where Subject has_any ("urgent", "wire", "transfer", "payment")
 | project TimeGenerated, SenderFromAddress, SenderDisplayName, RecipientEmailAddress, Subject, NetworkMessageId
-```
-
----
 
 ### After (Improved Rule):
-
-```kql
 EmailEvents
 | where TimeGenerated > ago(15m)  // Reduce window for faster detection
 | where SenderFromDomain !contains "globaltrade.com"  // External sender
@@ -32,9 +23,6 @@ EmailEvents
     by SenderFromAddress, SenderDisplayName, SenderFromDomain
 | where RecipientCount >= 2  // Trigger only if multiple users targeted (campaign behavior)
 | project FirstSeen, SenderFromAddress, SenderDisplayName, SenderFromDomain, RecipientCount, Recipients
-```
-
----
 
 ### Explanation:
 
