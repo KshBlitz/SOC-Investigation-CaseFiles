@@ -1,0 +1,41 @@
+// Q1: Was the suspicious email actually delivered and what are its full details?
+// Why this matters: Validate the alert and understand the exact email characteristics before pivoting
+EmailEvents
+| where TimeGenerated between (datetime(2026-04-30 10:30:00) .. datetime(2026-04-30 10:45:00))
+| where SenderFromDomain == "gl0baltrade.co"
+| project TimeGenerated, SenderFromAddress, SenderDisplayName, RecipientEmailAddress, Subject, DeliveryAction, NetworkMessageId
+
+// Q2: How many users were targeted by this sender (campaign vs single target)?
+// Why this matters: Determines whether this is a targeted spearphish or a broader BEC campaign
+EmailEvents
+| where TimeGenerated between (datetime(2026-04-30 10:30:00) .. datetime(2026-04-30 11:00:00))
+| where SenderFromDomain == "gl0baltrade.co"
+| summarize RecipientCount = dcount(RecipientEmailAddress), Recipients = make_set(RecipientEmailAddress)
+
+// Q3: Did any targeted users interact with the email or create suspicious mailbox rules?
+// Why this matters: Identifies potential user impact or post-delivery persistence attempts
+EmailEvents
+| where TimeGenerated between (datetime(2026-04-30 10:30:00) .. datetime(2026-04-30 11:00:00))
+| where SenderFromDomain == "gl0baltrade.co"
+| project RecipientEmailAddress
+| join kind=leftouter (
+    OfficeActivity
+    | where TimeGenerated between (datetime(2026-04-30 10:30:00) .. datetime(2026-04-30 11:30:00))
+    | where Operation in ("MailItemsAccessed", "New-InboxRule")
+    | project UserId, Operation, TimeGenerated
+) on $left.RecipientEmailAddress == $right.UserId
+| project RecipientEmailAddress, Operation, TimeGenerated
+
+// Q4: Is the impersonated CEO account actually compromised?
+// Why this matters: Confirms whether this is spoofing vs account takeover (critical decision point)
+SigninLogs
+| where TimeGenerated between (datetime(2026-04-30 08:30:00) .. datetime(2026-04-30 11:30:00))
+| where UserPrincipalName == "rajiv.mehra@globaltrade.com"
+| project TimeGenerated, IPAddress, Location, ResultType, AuthenticationRequirement
+
+// Q5: What infrastructure (IP) was used to send the email?
+// Why this matters: Extract attacker infrastructure for blocking and threat intel enrichment
+EmailEvents
+| where TimeGenerated between (datetime(2026-04-30 10:30:00) .. datetime(2026-04-30 11:00:00))
+| where SenderFromDomain == "gl0baltrade.co"
+| project TimeGenerated, SenderFromAddress, SenderIPv4, RecipientEmailAddress
