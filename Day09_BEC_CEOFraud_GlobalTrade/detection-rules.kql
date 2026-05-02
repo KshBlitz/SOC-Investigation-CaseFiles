@@ -1,0 +1,45 @@
+### Identified Weakness:
+
+The rule detects impersonation emails per event after delivery but does not correlate multiple recipients, missing coordinated BEC campaigns and delaying prioritization.
+
+---
+
+### Before (Existing Rule):
+
+```kql
+EmailEvents
+| where TimeGenerated > ago(30m)
+| where SenderFromDomain !contains "globaltrade.com"
+| where SenderDisplayName in~ ("Rajiv Mehra", "CEO Rajiv Mehra")
+| where Subject has_any ("urgent", "wire", "transfer", "payment")
+| project TimeGenerated, SenderFromAddress, SenderDisplayName, RecipientEmailAddress, Subject, NetworkMessageId
+```
+
+---
+
+### After (Improved Rule):
+
+```kql
+EmailEvents
+| where TimeGenerated > ago(15m)  // Reduce window for faster detection
+| where SenderFromDomain !contains "globaltrade.com"  // External sender
+| where SenderDisplayName in~ ("Rajiv Mehra", "CEO Rajiv Mehra")  // Executive impersonation
+| where Subject has_any ("urgent", "wire", "transfer", "payment")  // Financial lure keywords
+| summarize 
+    RecipientCount = dcount(RecipientEmailAddress),  // Count unique targets
+    Recipients = make_set(RecipientEmailAddress),    // Capture all targeted users
+    FirstSeen = min(TimeGenerated)
+    by SenderFromAddress, SenderDisplayName, SenderFromDomain
+| where RecipientCount >= 2  // Trigger only if multiple users targeted (campaign behavior)
+| project FirstSeen, SenderFromAddress, SenderDisplayName, SenderFromDomain, RecipientCount, Recipients
+```
+
+---
+
+### Explanation:
+
+* **Detection accuracy:** By correlating multiple recipients from the same spoofed sender, the rule identifies coordinated BEC campaigns instead of isolated emails, increasing confidence in true positives.
+* **Noise reduction:** Filtering on `RecipientCount >= 2` removes single-recipient benign or low-risk impersonation attempts, reducing alert fatigue.
+* **Earlier detection:** A shorter time window combined with aggregation allows faster identification of bulk targeting patterns, enabling SOC response before users act on fraudulent requests.
+
+This improvement shifts detection from **single-event pattern matching** to **campaign-level behavioral detection**, which is critical for BEC scenarios like the one described in .
