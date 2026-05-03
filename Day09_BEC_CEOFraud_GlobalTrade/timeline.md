@@ -1,0 +1,11 @@
+| Timestamp (IST) | Event                                                       | Data Source            | MITRE Technique                    | Meaning                                                                                    |
+| --------------- | ----------------------------------------------------------- | ---------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------ |
+| 10:38           | Malicious email sent from spoofed domain to 3 finance users | EmailEvents            | T1534 — Internal Spearphishing     | Attacker initiated BEC campaign using CEO impersonation and lookalike domain               |
+| 10:41           | Finance manager opens the phishing email                    | OfficeActivity         | T1204 — User Execution             | Target user engaged with the email, creating potential risk window for fraud               |
+| 10:42           | Sentinel alert triggered for impersonation detection        | Sentinel Analytics     | T1566 — Phishing                   | Detection system identified suspicious email pattern indicating social engineering attempt |
+| 10:43           | Finance user reports suspicious email to SOC                | External (User Report) | —                                  | Human validation confirms suspicion before any action is taken, preventing potential fraud |
+| 10:45           | L1 escalates incident to L2 for deeper investigation        | Microsoft Teams        | —                                  | Formal investigation initiated due to high-confidence BEC indicators                       |
+| 10:47           | L2 confirms multiple recipients targeted by same sender     | EmailEvents            | T1534 — Internal Spearphishing     | Confirms this is a coordinated campaign rather than a single-user attack                   |
+| 10:49           | L2 verifies no compromise of CEO account                    | SigninLogs             | T1078 — Valid Accounts (ruled out) | Confirms attack is spoofing, not credential compromise or account takeover                 |
+
+This timeline aligns with the confirmed investigation artifacts and sequence documented in the case study , showing a complete BEC attack lifecycle from delivery to containment without impact.
