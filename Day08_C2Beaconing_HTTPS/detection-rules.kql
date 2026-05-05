@@ -1,0 +1,45 @@
+Identified Weakness:
+
+The rule relies on high connection volume over a long duration, causing delayed detection of early-stage beaconing activity
+
+Before (Existing Rule):
+DeviceNetworkEvents
+| where TimeGenerated > ago(4h) // Look for sustained activity over 4 hours
+| where RemotePort == 443 // HTTPS traffic
+| summarize ConnectionCount = count(), 
+          FirstSeen = min(TimeGenerated), 
+          LastSeen = max(TimeGenerated),
+          TimeDeltas = make_list(TimeGenerated)
+          by DeviceName, RemoteIP
+| where ConnectionCount > 200 // High frequency threshold
+| extend DurationMinutes = datetime_diff("minute", LastSeen, FirstSeen)
+| where DurationMinutes > 180 // Sustained over at least 3 hours
+
+After (Improved Rule):
+DeviceNetworkEvents
+| where TimeGenerated > ago(1h)  // Shorter window for earlier detection
+| where RemotePort == 443  // Focus on HTTPS traffic
+| summarize ConnectionCount = count(),
+            FirstSeen = min(TimeGenerated),
+            LastSeen = max(TimeGenerated),
+            TimeList = make_list(TimeGenerated)
+            by DeviceName, RemoteIP
+| where ConnectionCount > 40  // Lower threshold to catch early beaconing
+| extend DurationMinutes = datetime_diff("minute", LastSeen, FirstSeen)
+| where DurationMinutes > 30  // Ensure sustained behavior (not burst traffic)
+| mv-expand TimeList
+| sort by DeviceName, RemoteIP, TimeList asc
+| extend PrevTime = prev(TimeList)
+| extend IntervalSeconds = datetime_diff("second", TimeList, PrevTime)
+| where IntervalSeconds between (50 .. 70)  // Detect consistent beacon interval (~60s)
+| summarize BeaconCount = count(),
+            AvgInterval = avg(IntervalSeconds),
+            MinInterval = min(IntervalSeconds),
+            MaxInterval = max(IntervalSeconds)
+            by DeviceName, RemoteIP
+| where BeaconCount > 20  // Confirm repeated periodic behavior
+
+Explanation:
+Detection accuracy: The improved rule explicitly validates periodic intervals between connections, aligning detection with true beaconing behavior instead of just high traffic volume.
+Noise reduction: By requiring consistent timing (50–70 seconds) and sustained activity over 30 minutes, it avoids flagging normal bursty or API-driven traffic common in developer environments.
+Earlier detection: Reducing the time window and thresholds enables detection within the first hour of activity instead of after 3+ hours, significantly reducing attacker dwell time.

@@ -1,0 +1,6 @@
+| IOC                                                             | Type          | Source                     | Enrichment Insight                                                                        | Confidence |
+| --------------------------------------------------------------- | ------------- | -------------------------- | ----------------------------------------------------------------------------------------- | ---------- |
+| gl0baltrade.co                                                  | Domain        | EmailEvents                | Newly registered (3 days old), flagged as malicious by multiple vendors (VirusTotal)      | High       |
+| [rajiv.mehra@gl0baltrade.co](mailto:rajiv.mehra@gl0baltrade.co) | Email Address | EmailEvents                | Spoofed executive identity using lookalike domain for BEC attack                          | High       |
+| 185.243.115.72                                                  | IP Address    | Email header (EmailEvents) | High-risk IP with ~87% malicious confidence (AbuseIPDB), likely mail relay infrastructure | High       |
+s
